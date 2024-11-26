@@ -89,11 +89,12 @@ print(df)
 ```
 
 ```{r}
-#| label: pageNo_call
+#| label: all_pageNo_call
 
 library(rjson)
 library(httr)
 library(plyr)
+library(xlsx)
 
 
 download_api_data <- function(page_No) {
@@ -121,7 +122,7 @@ download_api_data <- function(page_No) {
 
 data_list_all <- list()
 data_frame <- data.frame()
-page_No <- 0
+page_No <- 89
 while (TRUE) {
   page_No <- page_No + 1
   data <- download_api_data(page_No)
@@ -137,5 +138,108 @@ while (TRUE) {
 }
 
 data_frame <- rbind.fill(do.call(c, data_list_all))
+write.xlsx(df, "output.xlsx", sheetName = "Sheet1", row.names = FALSE)
+
+```
+
+```{r}
+#| label: all_pageNo_call_with_for
+library(rjson)
+library(httr)
+library(plyr)
+library(xlsx)
+
+# API 데이터 호출 함수
+download_api_data <- function(page_No) {
+  base_url <- "http://apis.data.go.kr/B551182/hospInfoServicev2"
+  call_url <- "getHospBasisList"
+  My_API_Key <- "DRwFWZ/jfi6551teJKgRhkKgC+XhcjobN+ccY2MQdF9yZdx8xL5Kn4IljljMCWGsl2ObEco/rm21r14CN7iG0g=="  # 실제 API 키
+  params <- list(
+    serviceKey = URLencode(My_API_Key),
+    pageNo = page_No
+  )
+  
+  # API 호출
+  url <- paste0(base_url, "/", call_url)
+  response <- GET(url, query = params)
+  
+  if (status_code(response) == 200) {
+    json_text <- content(response, as = "text", encoding = "UTF-8")
+    data <- fromJSON(json_text)
+    
+    # 데이터가 존재하는 경우 반환
+    if (!is.null(data$response$body$items$item)) {
+      return(data$response$body$items$item)
+    } else {
+      return(NULL)
+    }
+  } else {
+    print(paste("API 호출 실패:", status_code(response), "페이지:", page_No))
+    return(NULL)
+  }
+}
+
+download_initial_data <- function(page_No) {
+  base_url <- "http://apis.data.go.kr/B551182/hospInfoServicev2"
+  call_url <- "getHospBasisList"
+  My_API_Key <- "DRwFWZ/jfi6551teJKgRhkKgC+XhcjobN+ccY2MQdF9yZdx8xL5Kn4IljljMCWGsl2ObEco/rm21r14CN7iG0g=="  # 실제 API 키
+  params <- list(
+    serviceKey = URLencode(My_API_Key),
+    pageNo = page_No
+  )
+  
+  # API 호출
+  url <- paste0(base_url, "/", call_url)
+  response <- GET(url, query = params)
+  
+  if (status_code(response) == 200) {
+    json_text <- content(response, as = "text", encoding = "UTF-8")
+    data <- fromJSON(json_text)
+    
+    # 데이터가 존재하는 경우 반환
+    if (!is.null(data$response$body)) {
+      return(data$response$body)
+    } else {
+      return(NULL)
+    }
+  } else {
+    print(paste("API 호출 실패:", status_code(response), "페이지:", page_No))
+    return(NULL)
+  }
+}
+
+# 첫 페이지에서 총 페이지 수 확인
+initial_data <- download_initial_data(1)
+if (!is.null(initial_data)) {
+  total_count <- as.numeric(initial_data$totalCount)
+  items_per_page <- as.numeric(initial_data$numOfRows)
+  total_pages <- ceiling(total_count / items_per_page)
+} else {
+  stop("초기 데이터 호출 실패")
+}
+
+# 데이터 저장 리스트 초기화
+data_list_all <- list()
+
+k=1
+# for 문을 이용하여 모든 페이지 호출
+for (page_No in 1:total_pages) {
+  data <- download_api_data(page_No)
+  
+  if (!is.null(data)) {
+    data_list_all[[page_No]] <- lapply(data, as.data.frame)  # 데이터를 리스트로 저장
+    print(k)
+    k=k+1
+  }
+  
+  print(paste("페이지 처리 완료:", page_No))
+}
+
+# 데이터 결합
+data_frame <- rbind.fill(do.call(c, data_list_all))
+
+# 엑셀로 저장
+write.xlsx(data_frame, "output.xlsx", sheetName = "Sheet1", row.names = FALSE)
+write.csv(data_frame, "output.csv", row.names = FALSE)
 
 ```
